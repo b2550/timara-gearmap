@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Depot > New Reservation</title>
+
+    {% if config['DEBUG'] %}
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    {% else %}
+    <script src="https://cdn.jsdelivr.net/npm/vue"></script>
+    {% endif %}
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client/dist/socket.io.slim.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue-socket.io-extended"></script>
+</head>
+<body>
+    <div id="app">
+        <p>[[ message ]]</p>
+        <input v-model="barcode_query" v-on:keyup.enter="query_barcode(barcode_query)" type="text">
+        <input :value="dateToYYYYMMDD(start_date)" @input="start_date = $event.target.valueAsDate" v-if="items.length === 0" type="date">
+        <input :value="dateToYYYYMMDD(end_date)" @input="end_date = $event.target.valueAsDate" v-if="items.length === 0" type="date">
+        <input type="button" v-on:click="submit_reservation" v-if="items.length > 0" value="Request Reservation">
+        <h2>User</h2>
+        <ul>
+            <li>[[user.name]]</li>
+            <li>[[user.email]]</li>
+            <li>[[user.barcode]]</li>
+            <li>Self Checkout: [[user.self_checkout]]</li>
+            <li>Depot Assistant: [[user.depot_assistant]]</li>
+        </ul>
+
+        {# TODO: Remove from list on click #}
+        <gear-item v-for="item in items" v-bind:item="item" v-bind:key="item.barcode"></gear-item>
+
+        <hr>
+
+        {# TODO: Allow selection of specific barcode (button under listing?) so multiple of the same model can be added. #}
+        <div id="inventory">
+            <li v-if="!is_used(item.barcodes)" v-for="item in inventory" v-on:click="query_barcode(item.barcodes[0])">[[ item.model ]]</li>
+        </div>
+    </div>
+    <script>
+        // TODO: Ask for start/end dates before scanning
+        let socket = io();
+        Vue.use(VueSocketIOExt, socket);
+
+        let app = new Vue({
+            el: '#app',
+            data() {
+                return this.initial_state()
+            },
+            sockets: {
+                connect() {
+                    console.log("Connected")
+                },
+                refresh_inventory(data) {
+                    console.log("Received inventory")
+                    this.inventory = data
+                },
+                append(data) {
+                    if(this.barcodes.includes(data.barcode)) {
+                        /*
+                         * TODO: Need to check if barcode is already reserved for specified dates (server)
+                         * TODO: Need to check if barcode is an accessory (only 1 barcode and quantity none or != 1) and hence check quantity available instead of barcode
+                         */
+                        console.log("Item " + data.barcode + " already added")
+                    } else {
+                        this.items.push(data)
+                        this.barcodes.push(data.barcode)
+                    }
+                },
+                user(data) {
+                    this.user = {"t_number": data.t_number, "name": data.name, "email": data.email, "barcode": data.barcode, "self_checkout": !!data.self_checkout, "depot_assistant": !!data.depot_assistant}
+                },
+                error(message) {
+                    this.message=message
+                },
+                warning(message) {
+                    this.message=message
+                },
+                submit_success(reservation_id) {
+                    this.reset()
+                    this.message="Reservation " + reservation_id + " has been requested! You will receive an email with additional information."
+                }
+            },
+            methods: {
+                query_barcode(barcode) {
+                    this.$socket.client.emit("barcode_query", barcode, this.start_date, this.end_date);
+                    this.barcode_query = ""
+                },
+                is_used(barcodes) {
+                    let used = false;
+                    for(let i = 0; i < barcodes.length; i++) {
+                        if(this.barcodes.includes(barcodes[i])) used = true
+                    }
+                    return used
+                },
+                dateToYYYYMMDD(d) {
+                    return d && new Date(d.getTime()-(d.getTimezoneOffset()*60*1000)).toISOString().split('T')[0]
+                },
+                submit_reservation() {
+                    // TODO: Need to receive this on the server side
+                    this.$socket.client.emit("submit", this.start_date, this.end_date, this.barcodes, this.user.t_number)
+                },
+                initial_state() {
+                    return {
+                        start_date: new Date(),
+                        end_date: "",
+                        barcode_query: "",
+                        items: [],
+                        barcodes: [],
+                        inventory: [],
+                        message: "",
+                        user: {"t_number": "", "name": "", "email": "", "barcode": "", "self_checkout": false, "depot_assistant": false}
+                    }
+                },
+                reset() {
+                    Object.assign(this.$data, this.initial_state())
+                    this.$socket.client.emit("refresh_inventory")
+                }
+            },
+            delimiters: ['[[',']]']
+        })
+
+        Vue.component('gear-item', {
+            props: ['item'],
+            template: '<li>[[ item.model ]]</li>',
+            delimiters: ['[[',']]']
+        })
+    </script>
+</body>
+</html>

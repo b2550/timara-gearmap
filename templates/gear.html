@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Depot > Gear List</title>
+</head>
+<body>
+<table>
+    <tr>
+        <th>Model</th>
+        <th>Manufacturer</th>
+        <th>Categorization</th>
+        <th>Description</th>
+        <th>Kit Items</th>
+        <th>Quantity</th>
+    </tr>
+    {% for gear in gear_items %}
+    <tr>
+        <td>{{ gear.model }}</td>
+        <td>{{ gear.manufacturer }}</td>
+        <td>{% for category in gear.categorization %}{{ category }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+        <td>{% for description in gear.description %}{{ description }}{% if not loop.last %}<br> {% endif %}{% endfor %}</td>
+        <td>{% for item in gear.kit_items %}{{ item }}{% if not loop.last %}<br> {% endif %}{% endfor %}</td>
+        <td>{{ gear.quantity }}</td>
+    </tr>
+    {% endfor %}
+</table>
+</body>
+</html>
